@@ -78,14 +78,6 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
 
         return try await withCheckedThrowingContinuation { (continuation: OperationCheckedContinuation<O.Output>) in
             self.operationContinuation = continuation
-
-            // Add a timeout to ensure the continuation is resumed
-            DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(30)) {
-                if let continuation = self.operationContinuation as? OperationCheckedContinuation<O.Output> {
-                    continuation.resume(throwing: NFCHealthCardSessionError.timeout)
-                    self.operationContinuation = nil
-                }
-            }
         }
     }
 
@@ -245,8 +237,6 @@ public enum NFCHealthCardSessionError: Swift.Error {
 
     /// Error indicating that the operation result type is invalid.
     case invalidOperationResult
-    
-    case timeout
 }
 
 /// Abstraction to the NFCTagReaderSession to update the alertMessage that is being displayed to the user.
