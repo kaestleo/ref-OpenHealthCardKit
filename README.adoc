@@ -1,5 +1,6 @@
 ////
 Execute `make readme` after editing <project_root>/README.adoc
+TEST
 ////
 :toc-title: Table of Contents
 :toc:
