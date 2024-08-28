@@ -71,6 +71,12 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
         guard let session = self.session else {
             throw NFCHealthCardSessionError.couldNotInitializeSession
         }
+
+        // Check if there's an ongoing operation
+        if self.operationContinuation != nil {
+            throw NFCHealthCardSessionError.operationAlreadyInProgress
+        }
+
         session.alertMessage = messages.discoveryMessage
         Logger.nfcCardReaderProvider.debug("Starting session: \(String(describing: self.session))")
         session.begin()
@@ -79,6 +85,14 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
 
         return try await withCheckedThrowingContinuation { (continuation: OperationCheckedContinuation<O.Output>) in
             self.operationContinuation = continuation
+
+            // Add a timeout to ensure the continuation is resumed
+            DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(30)) {
+                if let continuation = self.operationContinuation as? OperationCheckedContinuation<O.Output> {
+                    continuation.resume(throwing: NFCHealthCardSessionError.timeout)
+                    self.operationContinuation = nil
+                }
+            }
         }
     }
 
@@ -239,6 +253,9 @@ public enum NFCHealthCardSessionError: Swift.Error {
 
     /// Error indicating that the operation result type is invalid.
     case invalidOperationResult
+
+    case timeout
+    case operationAlreadyInProgress
 }
 
 /// Abstraction to the NFCTagReaderSession to update the alertMessage that is being displayed to the user.
