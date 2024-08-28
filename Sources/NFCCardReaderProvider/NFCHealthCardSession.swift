@@ -31,9 +31,34 @@ public class AnyNFCOperation<Output>: AnyNFCOperationBase {
     }
 }
 
+class AnyContinuation {
+    private let _resume: (Result<Any, Error>) -> Void
+
+    init<T>(_ continuation: CheckedContinuation<T, Error>) {
+        _resume = { result in
+            switch result {
+            case .success(let value as T):
+                continuation.resume(returning: value)
+            case .failure(let error):
+                continuation.resume(throwing: error)
+            default:
+                fatalError("Type mismatch in continuation")
+            }
+        }
+    }
+
+    func resume(returning value: Any) {
+        _resume(.success(value))
+    }
+
+    func resume(throwing error: Error) {
+        _resume(.failure(error))
+    }
+}
+
 public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
     private typealias OperationCheckedContinuation<Output> = CheckedContinuation<Output, Error>
-    private var operationContinuation: Any?
+    private var operationContinuation: AnyContinuation?
 
     private let messages: Messages
     private let can: String
@@ -84,11 +109,11 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
         currentOperation = AnyNFCOperation(operation)
 
         return try await withCheckedThrowingContinuation { (continuation: OperationCheckedContinuation<O.Output>) in
-            self.operationContinuation = continuation
+            self.operationContinuation = AnyContinuation(continuation)
 
             // Add a timeout to ensure the continuation is resumed
             DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(30)) {
-                if let continuation = self.operationContinuation as? OperationCheckedContinuation<O.Output> {
+                if let continuation = self.operationContinuation {
                     continuation.resume(throwing: NFCHealthCardSessionError.timeout)
                     self.operationContinuation = nil
                 }
@@ -118,9 +143,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
     public func tagReaderSession(_: NFCTagReaderSession, didInvalidateWithError error: Swift.Error) {
         Logger.nfcCardReaderProvider.debug("NFC reader session was invalidated: \(error)")
         let coreNFCError = error.asCoreNFCError()
-        if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-            continuation.resume(throwing: NFCHealthCardSessionError.coreNFC(coreNFCError))
-        }
+        operationContinuation?.resume(throwing: NFCHealthCardSessionError.coreNFC(coreNFCError))
         operationContinuation = nil
     }
 
@@ -143,9 +166,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
         }
         guard case let .iso7816(iso7816NfcTag) = tag else {
             session.invalidate(errorMessage: messages.unsupportedCardMessage)
-            if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                continuation.resume(throwing: NFCHealthCardSessionError.unsupportedTag)
-            }
+            operationContinuation?.resume(throwing: NFCHealthCardSessionError.unsupportedTag)
             operationContinuation = nil
             return
         }
@@ -157,9 +178,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
             do {
                 try await session.connect(to: tag)
             } catch {
-                if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                    continuation.resume(throwing: NFCHealthCardSessionError.coreNFC(error.asCoreNFCError()))
-                }
+                operationContinuation?.resume(throwing: NFCHealthCardSessionError.coreNFC(error.asCoreNFCError()))
                 operationContinuation = nil
                 return
             }
@@ -171,21 +190,15 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
             do {
                 secureHealthCard = try await card.openSecureSessionAsync(can: can)
             } catch let error as CoreNFCError {
-                if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                    continuation.resume(throwing: NFCHealthCardSessionError.coreNFC(error))
-                }
+                operationContinuation?.resume(throwing: NFCHealthCardSessionError.coreNFC(error))
                 operationContinuation = nil
                 return
             } catch HealthCardControl.KeyAgreement.Error.macPcdVerificationFailedOnCard {
-                if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                    continuation.resume(throwing: NFCHealthCardSessionError.wrongCAN)
-                }
+                operationContinuation?.resume(throwing: NFCHealthCardSessionError.wrongCAN)
                 operationContinuation = nil
                 return
             } catch {
-                if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                    continuation.resume(throwing: NFCHealthCardSessionError.establishingSecureChannel(error))
-                }
+                operationContinuation?.resume(throwing: NFCHealthCardSessionError.establishingSecureChannel(error))
                 operationContinuation = nil
                 return
             }
@@ -203,26 +216,17 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
                 }
                 let outcome = try await currentOperation.execute(with: myNFCCardSession)
                 Logger.nfcCardReaderProvider.debug("STEP OUTCOME")
-                if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                    continuation.resume(returning: outcome)
-                    Logger.nfcCardReaderProvider.debug("STEP 2A")
-                }
+                operationContinuation?.resume(returning: outcome)
                 operationContinuation = nil
                 Logger.nfcCardReaderProvider.debug("STEP 2B")
             } catch let error as CoreNFCError {
-                if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                    continuation.resume(throwing: NFCHealthCardSessionError.coreNFC(error))
-                    Logger.nfcCardReaderProvider.debug("STEP 3A")
-                }
+                operationContinuation?.resume(throwing: NFCHealthCardSessionError.coreNFC(error))
                 operationContinuation = nil
                 Logger.nfcCardReaderProvider.debug("STEP 3B")
                 session.invalidate()
                 return
             } catch {
-                if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
-                    continuation.resume(throwing: NFCHealthCardSessionError.operation(error))
-                    Logger.nfcCardReaderProvider.debug("STEP 4A")
-                }
+                operationContinuation?.resume(throwing: NFCHealthCardSessionError.operation(error))
                 operationContinuation = nil
                 Logger.nfcCardReaderProvider.debug("STEP 4B")
                 session.invalidate()
