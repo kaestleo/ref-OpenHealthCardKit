@@ -189,6 +189,8 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
                 operationContinuation = nil
                 return
             }
+            
+            Logger.nfcCardReaderProvider.debug("STEP 1")
 
             let myNFCCardSession = DefaultNFCHealthCardSessionHandle(
                 card: secureHealthCard,
@@ -200,22 +202,29 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
                     throw NFCHealthCardSessionError.operationNotSet
                 }
                 let outcome = try await currentOperation.execute(with: myNFCCardSession)
+                Logger.nfcCardReaderProvider.debug("STEP OUTCOME")
                 if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
                     continuation.resume(returning: outcome)
+                    Logger.nfcCardReaderProvider.debug("STEP 2A")
                 }
                 operationContinuation = nil
+                Logger.nfcCardReaderProvider.debug("STEP 2B")
             } catch let error as CoreNFCError {
                 if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
                     continuation.resume(throwing: NFCHealthCardSessionError.coreNFC(error))
+                    Logger.nfcCardReaderProvider.debug("STEP 3A")
                 }
                 operationContinuation = nil
+                Logger.nfcCardReaderProvider.debug("STEP 3B")
                 session.invalidate()
                 return
             } catch {
                 if let continuation = operationContinuation as? OperationCheckedContinuation<Any> {
                     continuation.resume(throwing: NFCHealthCardSessionError.operation(error))
+                    Logger.nfcCardReaderProvider.debug("STEP 4A")
                 }
                 operationContinuation = nil
+                Logger.nfcCardReaderProvider.debug("STEP 4B")
                 session.invalidate()
                 return
             }
