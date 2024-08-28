@@ -39,6 +39,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
     private let can: String
 
     private var session: NFCTagReaderSession?
+    private var detectedTag: NFCTag?
 
     var currentOperation: AnyNFCOperationBase?
 
@@ -135,6 +136,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
             return
         }
 
+        self.detectedTag = tag
         session.alertMessage = messages.connectMessage
 
         Task {
