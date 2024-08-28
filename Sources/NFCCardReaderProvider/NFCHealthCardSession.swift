@@ -39,7 +39,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
     private let can: String
 
     private var session: NFCTagReaderSession?
-    private var detectedTag: NFCTag?
+    public var detectedTag: NFCTag?
 
     var currentOperation: AnyNFCOperationBase?
 
