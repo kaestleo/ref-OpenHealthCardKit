@@ -152,7 +152,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
         if tags.count > 1 {
             session.alertMessage = messages.multipleCardsMessage
             DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(500)) {
-                session.invalidate(errorMessage: self.messages.multipleCardsMessage)
+                session.restartPolling()
             }
             return
         }
@@ -160,7 +160,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
         guard let tag = tags.first else {
             session.alertMessage = messages.noCardMessage
             DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(500)) {
-                session.invalidate(errorMessage: self.messages.noCardMessage)
+                session.restartPolling()
             }
             return
         }
@@ -202,7 +202,7 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
                 operationContinuation = nil
                 return
             }
-            
+
             Logger.nfcCardReaderProvider.debug("STEP 1")
 
             let myNFCCardSession = DefaultNFCHealthCardSessionHandle(
@@ -223,13 +223,11 @@ public class NFCHealthCardSession: NSObject, NFCTagReaderSessionDelegate {
                 operationContinuation?.resume(throwing: NFCHealthCardSessionError.coreNFC(error))
                 operationContinuation = nil
                 Logger.nfcCardReaderProvider.debug("STEP 3B")
-                session.invalidate()
                 return
             } catch {
                 operationContinuation?.resume(throwing: NFCHealthCardSessionError.operation(error))
                 operationContinuation = nil
                 Logger.nfcCardReaderProvider.debug("STEP 4B")
-                session.invalidate()
                 return
             }
         }
